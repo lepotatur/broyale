@@ -1,0 +1,1096 @@
+﻿ <!--
+|_________________________________________________________________|
+|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|
+|‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾|
+
+
+Pathfinding Algorithm:
+https://github.com/bgrins/javascript-astar
+
+Using p5.js
+
+
+
+
+
+|_________________________________________________________________|
+|~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|
+|‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾|
+-->
+<html>
+  <head>
+    <script src="p5.min.js.txt"></script>
+    <!--<script src="index.txt"></script>-->
+    <style>
+      body {
+        margin:0px;
+        background-color:rgb(125,125,125);
+		overflow:hidden;
+      }
+
+      body {
+        -webkit-touch-callout: none; /* iOS Safari */
+        -webkit-user-select: none; /* Safari */
+        -khtml-user-select: none; /* Konqueror HTML */
+        -moz-user-select: none; /* Old versions of Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+        user-select: none; /* Non-prefixed version, currently
+        supported by Chrome, Opera and Firefox */
+      }
+    </style>
+	<title>Battle Royale</title>
+  </head>
+  <body oncontextmenu="return false;">
+	<script type='text/javascript' src='astar.js.txt'></script>
+	<script type='text/javascript' src='names.js.txt'></script>
+    <script>
+
+		/*
+			window.onload = function() {
+				var audio = new Audio('http://yuletidetunes.com/song/download/2505');
+				document.body.appendChild(audio);
+				setTimeout(function(){
+					audio.volume = 1.0;
+					audio.play();
+				}, 1000);
+			}
+		*/
+
+		var ply;
+
+		var camOff;
+		var transl;
+
+		var LatestDeath = "Nobody!";
+
+		var spawnPositions = [];
+		var weaponPositions = [];
+
+		var Weapons = { // never set "rate" to zero
+			"Pistol": {
+				"bcapacity":8,
+				"damage":10,
+				"rate":10,
+				"rspd":120,
+				"inaccuracy":10,
+				"draw" : function(held, name, wep) {
+					if (!held) {
+						// weapon specific part
+						noStroke();
+						fill(255);
+						rect(0, 0, 25, 8)
+						fill(125);
+						rect(0, 8, 8, 8)
+
+						
+						// non weapon specific part
+						rotate(-wep.dropRot)
+						textSize(14);
+						textAlign(CENTER);
+						stroke(0);
+						strokeWeight(2);
+						fill(255);
+						text("["+name+"] ("+wep.bullets+"/"+wep.stats["bcapacity"]+")", 0, 32);
+					}else{
+						noStroke();
+						translate(wep.owner.vel.x, wep.owner.vel.y);
+						rotate(wep.owner.rot);
+						fill(255);
+						rect(5, 0, 25, 8)
+					
+					}
+				}
+			},
+			"AR": {
+				"bcapacity":31,
+				"damage":7,
+				"rate":6,
+				"rspd":180,
+				"inaccuracy":15,
+				"draw" : function(held, name, wep) {
+					if (!held) {
+						// weapon specific part
+						noStroke();
+
+						fill(75); // body
+						rect(0, 0, 40, 10);
+
+						fill(150); // magazine
+						rect(20, 10, 8, 10);
+
+						fill(125); // handle
+						rect(0, 8, 8, 8);
+
+
+						// non weapon specific part
+						rotate(-wep.dropRot)
+						textSize(14);
+						textAlign(CENTER);
+						stroke(0);
+						strokeWeight(2);
+						fill(255);
+						text("["+name+"] ("+wep.bullets+"/"+wep.stats["bcapacity"]+")", 0, 32);
+					}else{
+						noStroke();
+						translate(wep.owner.vel.x, wep.owner.vel.y);
+						rotate(wep.owner.rot);
+
+						//fill(150);
+						//rect(20, -2.5, 15, 15); // magazine
+
+						fill(75);
+						rect(5, 0, 40, 10); // main body
+
+						//fill(50);
+						//rect(17.5, 2.5, 20, 5); // top detail
+					
+					}
+				}
+			},
+			"Sniper": {
+				"bcapacity":1,
+				"damage":100,
+				"rate":2,
+				"rspd":60,
+				"inaccuracy":0,
+				"draw" : function(held, name, wep) {
+					if (!held) {
+						// weapon specific part
+						noStroke();
+						fill(255);
+						rect(0, 0, 40, 8);
+						fill(125);
+						rect(0, 8, 8, 8);
+						rect(22, 8, 8, 8);
+						rect(8, -4, 16, 2);
+						rect(10, -4, 2, 4);
+						rect(18, -4, 2, 4);
+						
+						
+						// non weapon specific part
+						rotate(-wep.dropRot)
+						textSize(14);
+						textAlign(CENTER);
+						stroke(0);
+						strokeWeight(2);
+						fill(255);
+						text("["+name+"] ("+wep.bullets+"/"+wep.stats["bcapacity"]+")", 0, 32);
+					}else{
+						noStroke();
+						translate(wep.owner.vel.x, wep.owner.vel.y);
+						rotate(wep.owner.rot);
+						fill(255);
+						rect(5, 0, 40, 8)
+						rect(22, 8, 4, 4)
+						fill(125);
+						rect(22, 2, 16, 4)
+					
+					}
+				}
+			},
+			"LMG": {
+				"bcapacity":100,
+				"damage":5,
+				"rate":4,
+				"rspd":240,
+				"inaccuracy":35,
+				"draw" : function(held, name, wep) {
+					if (!held) {
+						// weapon specific part
+						noStroke();
+
+						fill(75); // body
+						rect(0, 0, 40, 10);
+						rect(40, 3, 2, 4);
+
+						fill(150); // magazine
+						rect(20, 0, 15, 15);
+
+						fill(125); // handle
+						rect(0, 8, 8, 8);
+
+
+						// non weapon specific part
+						rotate(-wep.dropRot)
+						textSize(14);
+						textAlign(CENTER);
+						stroke(0);
+						strokeWeight(2);
+						fill(255);
+						text("["+name+"] ("+wep.bullets+"/"+wep.stats["bcapacity"]+")", 0, 32);
+					}else{
+						noStroke();
+						translate(wep.owner.vel.x, wep.owner.vel.y);
+						rotate(wep.owner.rot);
+
+						fill(150);
+						rect(20, -2.5, 15, 15); // magazine
+
+						fill(75);
+						rect(5, 0, 40, 10); // main body
+						rect(45, 3, 2, 4);
+
+						fill(50);
+						rect(17.5, 2.5, 20, 5); // top detail
+					
+					}
+				}
+			}
+		}
+
+		function onScreen(x, y, r) {
+			var screenPos = createVector(transl.x + width/2, transl.y + height/2);
+			return (screenPos.dist(createVector(x, y)) - r < max(width, height));
+		}
+
+		function drawCrosshair(x, y, sizeOff) {
+			stroke(0);
+			strokeWeight(2);
+			fill(255);
+			rect(x-20-sizeOff, y-2, 15, 4);
+			rect(x+5+sizeOff, y-2, 15, 4);
+			rect(x-2, y+4+sizeOff, 4, 15);
+			rect(x-2, y-15-4-sizeOff, 4, 15);
+		}
+
+		var players = [];
+		let map;
+
+		const DODGING = "dodge"; // move randomly to throw off aim
+		const SEEKING = "seek"; // finding and stalking target
+		const SHOOTING = "shoot"; // shooting at target
+		const ARMING = "finding gun"; // grabbing weapon
+		const WANDERING = "wandering"; // wandering
+
+		function Player(isAi, pos) {
+			this.ai = isAi;
+			this.pos = pos;
+			this.vel = createVector();
+			this.weapon;
+			this.health = 100;
+			this.color = color(random(0,155), random(0,155), random(0,155));
+			this.isShooting = false;
+
+			this.wTarget = undefined;
+
+			this.rot = 0;
+			this.targetVector = createVector();
+			
+			this.state = SHOOTING;
+
+			this.impatience = 0;
+
+			this.target = undefined;
+
+			this.pathCacheTicks = 0;
+
+			this.wanderedForTicks = 0;
+
+			this.name = BabyNames[round(random(BabyNames.length-1))];
+
+			this.runAtStart = false; // run away from center by seeking far away guns
+			this.dodgeWhileShooting = false;
+			
+			if (random(1) < 0.34) {
+				this.runAtStart = true;
+			}
+			if (random(1) < 0.34) {
+				this.dodgeWhileShooting = true;
+			}
+
+
+			players[players.length] = this;
+
+			/*this.generateName = function(c, v, len) {
+				var cs = ['b','c','d','f','g','h','j','k','l','m','n','p','q','r','s','t','v','w','x','z'];
+				var vs = ['a','e','i','o','u'];
+
+			}*/
+
+
+			this.draw = function() {
+
+				if (this.pathCacheTicks > 0) {
+					this.pathCacheTicks--;
+				}
+
+				if (onScreen(this.pos.x, this.pos.y, 100)) {
+					fill(this.color);
+					noStroke();
+					ellipse(this.pos.x, this.pos.y, 30, 30);
+					if (this.ai == false) {
+						this.targetVector = p5.Vector.lerp(this.targetVector, createVector(mouseX + this.vel.x, mouseY + this.vel.y).add(transl), 0.7);
+						//fill(255,0,0);
+						//ellipse(this.targetVector.x, this.targetVector.y, 20, 20);
+					}else {
+						if (this.target == undefined) {
+							this.targetVector = p5.Vector.lerp(this.targetVector, createVector(this.pos.x + random(-20, 20), this.pos.y + random(-20,20)), 0.1);
+						} else {
+							this.targetVector = p5.Vector.lerp(this.targetVector, this.target.pos, 0.1);
+						}
+					}
+					var newrot = atan2(this.targetVector.y - this.pos.y, this.targetVector.x - this.pos.x);
+					this.rot = newrot;
+
+					if (this.ai) {
+						fill(this.color);
+						textSize(32);
+						textAlign(CENTER);
+						text("task="+this.state, this.pos.x, this.pos.y+36);
+						text(this.name, this.pos.x, this.pos.y+72);
+						textAlign(LEFT);
+					}
+				}
+			}
+
+			this.clearSuperfluousTargets = function() {
+				if (this.target != undefined) {
+					this.impatience+=1/60;
+					if (this.target.health <= 0) {
+						this.target = undefined;
+						
+					}
+					if (this.impatience > 10) {
+						this.target = undefined;
+					}
+				}
+			}
+
+			this.findPossibleTargets = function() {
+				var best = undefined;
+				var dst = 9999999;
+				for (var p of players) {
+					if (p != this) {
+						var d = p.pos.dist(this.pos);
+						if (d < 3000) {
+							if (d - (0.5*d*(p.hasWeapon())) < dst) { // prioritize armed targets
+								dst = d;
+								best = p;
+							}
+						}
+					}
+				}
+				return best;
+			}
+
+			this.updateAIState = function() {
+				
+
+				this.clearSuperfluousTargets();
+
+				if (this.hasWeapon() && this.target == undefined) {
+					this.target = this.findPossibleTargets();
+				}
+
+				this.state = WANDERING;
+
+				if (this.hasWeapon() && this.target != undefined) {
+					if (this.weapon.bullets == 0) {
+						this.state = DODGING;
+					}else{
+						this.state = SEEKING;
+						if (this.pos.dist(this.target.pos) < 900) {
+							this.state = SHOOTING;
+						}
+					}
+				}
+
+				if (!this.hasWeapon()) {
+					this.state = ARMING;
+				}
+
+				
+
+				this.doAIState(this.state);
+			}
+
+			this.findWanderTarget = function() {
+				this.wanderedForTicks = 0;
+				for (var i = 0; i < 100; i++) {
+					var r1 = round(random(150-1));
+					var r2 = round(random(150-1));
+					if (nGraph.grid[r1][r2].weight == 1) {
+						this.wanderTarget = createVector(gridToPos(r1, true), gridToPos(r2, true));
+						break;
+					}
+				}
+			}
+
+			this.doAIState = function(st) {
+				this.isShooting=false;
+				switch(st) {
+					case DODGING:
+						this.vel.add(createVector(random(-2,2), random(-2,2)));
+						break;
+					case SHOOTING:
+						//this.targetVector = p5.Vector.lerp(this.targetVector, this.target.pos, 0.1);
+						if (!Ray(this.pos, this.target.pos)) {
+							this.isShooting=true;
+						}
+						if (this.dodgeWhileShooting) {
+							this.doAIState(DODGING);
+						}
+						break;
+					case ARMING:
+						if (this.wTarget == undefined || this.wTarget.isHeld) {
+							if (!this.runAtStart) {
+								var clst = undefined;
+								var cv = 9999999;
+								for (var w of weapons) {
+									if (!w.isHeld) {
+										if (w.pos.dist(this.pos) < cv) {
+											cv = w.pos.dist(this.pos);
+											clst = w;
+										}
+									}
+								}
+								this.wTarget = clst;
+							}else{
+								var clst = undefined;
+								var cv = 0;
+								for (var w of weapons) {
+									if (!w.isHeld) {
+										if (w.pos.dist(this.pos) > cv) {
+											cv = w.pos.dist(this.pos);
+											clst = w;
+										}
+									}
+								}
+								this.wTarget = clst;
+							}
+						}else{
+							if ( this.pathToPos(this.wTarget.pos) ) {
+								this.pickupWeapon( this.wTarget );
+							}
+						}
+
+						if (frameCount/60 > 30) {
+							this.pickupWeapon(new Weapon(createVector(0,0), "Pistol"));
+						}
+						break;
+					case SEEKING: // following target because out of shooting range
+						if (this.target != undefined) {
+							this.pathToPos(this.target.pos);
+						}else{
+							throw Error("SEEKING should not be called without a target.");
+						}
+						break;
+					case WANDERING:
+						if (this.target == undefined) {
+							if (this.wanderTarget == undefined) {
+								this.findWanderTarget();
+							}else{
+								this.wanderedForTicks++;
+								if (this.getPathTo(this.wanderTarget).length >= 5 && (this.wanderedForTicks < 1200)) {
+									this.pathToPos(this.wanderTarget, 0.66);
+								}else{
+									this.findWanderTarget();
+								}
+							}
+						}
+						break;
+				}
+			}
+
+			this.moveTowardsPos = function(p, speedMod=1) {
+				var nv = createVector(this.pos.x, this.pos.y).sub(p).setMag(moveSpeed).mult( (-1 * speedMod) );
+				this.vel = p5.Vector.lerp(this.vel, nv, 0.1);
+			}
+
+			this.pathToPos = function(p, speedMod) { // returns true if close enough
+				var path = this.getPathTo(p);
+				if (path != undefined) {
+					if (path.length > 1) {
+						this.moveTowardsPos(createVector(gridToPos(path[1].x, true), gridToPos(path[1].y, true)), speedMod);
+						return false;
+					}else{
+						this.moveTowardsPos(p, speedMod);
+						return true;
+					}
+				}
+			}
+			
+			this.getPathTo = function(p, todraw=false) {
+
+				if (this.pathCacheTicks > 0) {
+					/*if (this.pathCache != undefined) {
+						if (!(this.pathCache.length > 1)) {
+							return true;
+						}
+					}
+					return false;*/
+					return this.pathCache;
+				}
+
+				var a = nGraph.grid[posToGrid(this.pos.x)][posToGrid(this.pos.y)];
+				var b = nGraph.grid[posToGrid(p.x)][posToGrid(p.y)];
+				var path = astar.search(nGraph, a, b);
+				if (todraw) {
+					for (var i of path) {
+						fill(255, 0, 0);
+						noStroke();
+						ellipse(gridToPos(i.x, 1), gridToPos(i.y, 1), 10, 10 )
+					}
+				}
+				this.pathCache = path;
+				this.pathCacheTicks = 12;
+				return path;
+			}
+
+			this.pickupWeapon = function(weapon) {
+				this.dropHeldWeapon();
+				this.weapon = weapon;
+				weapon.isHeld = true;
+				weapon.owner = this;
+			}
+
+			this.dropHeldWeapon = function() {
+				if (this.hasWeapon()) {
+					this.weapon.isHeld = false;
+					this.weapon.owner = undefined;
+				}
+			}
+
+			this.shoot = function() {
+				if (this.hasWeapon()) {
+					this.weapon.fire(this.targetVector);
+				}
+			}
+
+			this.hasWeapon = function() {
+				return (this.weapon != undefined);
+			}
+
+			this.update = function() {
+				
+				this.vel = p5.Vector.lerp(this.vel,createVector(0, 0), 0.1);
+				
+				if (oob(this.pos.x + this.vel.x, this.pos.y)) { // X detection
+					this.vel.x = 0;
+					//this.vel = createVector();
+				}
+				if (oob(this.pos.x, this.pos.y + this.vel.y)) { // Y detection
+					this.vel.y = 0;
+					//this.vel = createVector();
+				}
+				this.pos.add(this.vel); // TODO: ai logic???
+				if (this.ai) {
+					this.updateAIState();
+				}
+			}
+		}
+
+		var weapons = [];
+
+		function Weapon(pos, name) {
+			this.pos = pos;
+			this.name = name;
+			this.stats = Weapons[name];
+			this.bullets = this.stats["bcapacity"];
+			this.bcap = this.stats["bcapacity"];
+			this.dmg = this.stats["damage"];
+			this.rate = this.stats["rate"]; // for fire rate
+			this.inaccuracy = this.stats["inaccuracy"];
+			this.rspd = this.stats["rspd"]; // reload speed
+
+			this.rateFrame = 0;
+			this.ticksHeld = 0;
+
+			this.reload = 0;
+
+			this.dropRot = random(360);
+			this.isHeld = false;
+			this.owner;
+
+			weapons[weapons.length] = this;
+
+			this.manageReload = function() {
+				if (this.bullets <= 0) {
+					this.reload++;
+					if (this.reload > this.rspd) {
+						this.bullets = this.bcap;
+						this.reload = 0;
+					}
+				}
+			}
+
+			this.manageFRate = function() {
+				if (this.rateFrame < this.rate && this.rateFrame > 0) {
+					this.rateFrame++;
+					if (this.rateFrame >= this.rate) {
+						this.rateFrame = 0;
+					}
+				}
+			}
+
+			this.draw = function() {
+				push();
+				translate(this.pos.x, this.pos.y);
+				if (!this.isHeld) {
+					rotate(this.dropRot);
+					this.ticksHeld = 0;
+				}else{
+					this.pos = createVector(this.owner.pos.x + this.owner.vel.x, this.owner.pos.y + this.owner.vel.y);
+					this.ticksHeld++;
+				}
+				this.stats["draw"](this.isHeld, this.name, this);
+				pop();
+
+
+				this.manageFRate();
+				this.manageReload();
+			}
+
+			this.fire = function(dest) {
+				var dist = dest.dist(this.pos);
+				var inacc = dist/((height/1.5));
+				
+
+				var modDest = dest.add(createVector(random(-this.inaccuracy, this.inaccuracy)*inacc, random(-this.inaccuracy, this.inaccuracy)*inacc));
+				
+				if (this.rateFrame == 0) {
+					if (this.bullets > 0) {
+						new Bullet(createVector(this.pos.x, this.pos.y), modDest, this.owner, this.dmg);
+						this.bullets--;
+						this.rateFrame = 1;
+					}
+				}
+			}
+		}
+
+		var bullets = [];
+
+		function Bullet(pos, dest, shooter, d) {
+			this.owner = shooter;
+			this.pos = pos;
+			this.dest = dest;
+			this.vel = createVector(pos.x, pos.y).sub(createVector(dest.x, dest.y)).setMag(moveSpeed*-3);
+			this.secsAlive = 0;
+			this.dmg = d;
+
+
+			bullets[bullets.length] = this;
+
+			this.draw = function() {
+				stroke(this.owner.color);
+				strokeWeight(4);
+				line(this.pos.x, this.pos.y, this.pos.x + this.vel.x/2, this.pos.y + this.vel.y/2);
+			}
+
+			this.update = function() {
+				this.pos.add(this.vel);
+				if (oob(this.pos.x + this.vel.x, this.pos.y + this.vel.y)) {
+					this.secsAlive += 1000;
+					//this.vel.mult(-0.6);
+				}
+				for (var p of players) {
+					if (p != this.owner && this.secsAlive < 10) {
+						if (this.pos.dist(p.pos) < 30) {
+							p.health -= this.dmg;
+							this.secsAlive = 1000100;
+
+							if (p.ai) {
+								p.target = this.owner;
+							}
+						}
+					}
+				}
+				this.secsAlive += 1/60;
+			}
+		}
+		
+		var wepNames = ["Pistol", "AR", "LMG", "Sniper"];
+
+		function spawnWeapons() {
+			for (var p of weaponPositions) {
+				var w = wepNames[round(random(wepNames.length-1))];
+				new Weapon(createVector(p[0], p[1]), w);
+			}
+		}
+
+		function Ray(start, end) { // check if a line collides with a wall
+			var slope = -(end.y - start.y)/(end.x - start.x);
+			var y = start.y;
+			var intersects = false;
+			for (var x = start.x; x < end.x; x+=25) {
+				y += slope * 25 ;
+				console.log("x "+x, "y "+y, "m "+slope, start, end);
+				if (oob(x, y)) {
+					intersects = true;
+				}
+			}
+			return intersects;
+		}
+
+		function spawnPlayers() {
+			
+			console.log("Spawning players!");
+
+			var playerSpawn = round(random(spawnPositions.length - 1));
+
+			ply = new Player(false, createVector( (spawnPositions[playerSpawn][0]), (spawnPositions[playerSpawn][1]) ));
+
+			var i = 0;
+
+			for (var p of spawnPositions) {
+				if (i != playerSpawn) {
+					new Player(true, createVector((p[0]),(p[1])));
+
+				}
+				i++;
+			}
+
+		}
+
+		function startGame() {
+			spawnWeapons();
+			spawnPlayers();
+		}
+
+		let mapImg;
+		var nGraph;
+
+		var testPly;
+
+		function setup() {
+			noCursor();
+			camOff = createVector(0, 0);
+			createCanvas(window.innerWidth, window.innerHeight);
+			//ply = new Player(false, createVector(473, 939));
+			//new Weapon(createVector(1200, 1000), "Sniper");
+			//new Weapon(createVector(1400, 1000), "LMG");
+			//new Weapon(createVector(1600, 1000), "Pistol");
+			//new Weapon(createVector(1800, 1000), "AR");
+			map = createGraphics(3000, 3000);
+			mapImg = loadImage("https://i.imgur.com/koGpRUS.png");
+			var grp = [];
+			for (var i = 0; i < 150; i++) {
+				grp[i] = [];
+			}
+			//new Player(true, createVector(513, 939));
+			//mapImg.get(1, 1);
+			//map.background(255);
+			setTimeout(function(){
+				for (var x = 0; x < 150; x++) {
+					for (var y = 0; y < 150; y++) {
+						var c = mapImg.get(x,y);
+						if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
+							map.fill(c);
+							map.noStroke();
+							map.rect(x*20, y*20, 20, 20);
+						}else{
+							map.fill(color(125,255,125));
+							map.noStroke();
+							map.rect(x*20, y*20, 20, 20);
+						}
+					}
+				}
+				
+				for (var y = 0; y < 150; y++) {
+					for (var x = 0; x < 150; x++) {
+						var c = mapImg.get(x, y)
+						if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
+							grp[x][y] = 0;
+						}else{
+							grp[x][y] = 1;
+						}
+
+						if (c[0] == 0 && c[1] == 255 && c[2] == 255) {
+							weaponPositions[weaponPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
+						}
+
+						if (c[0] == 255 && c[1] == 0 && c[2] == 0) {
+							spawnPositions[spawnPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
+						}
+					}
+				}
+
+				nGraph = new Graph(grp);
+
+				loop();
+			}, 1000)
+			noLoop();
+		}
+		var impulse = 0;
+		function posToGrid(x, r=100) {
+			return round((x)/r)-1;
+		}
+
+		function gridToPos(x, middle=false, r=100) {
+			return (x*r + (0.5 * r * middle));
+		}
+
+		function oob(x, y, r=100) { // is out of bounds?
+			var ax = posToGrid(x+45);
+			var ay = posToGrid(y+45);
+			if (ax > 150 || ax < 0 || ay > 150 || ay < 0) {
+				throw Error("Outside of recommended area. ("+ax+", "+ay+") Returning true.");
+				return true;
+			}
+			var c = mapImg.get(ax, ay);
+			return(c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255);
+		}
+
+		
+
+		function draw() {
+
+			if (frameCount > 2 && ply == undefined) {
+				startGame();
+			}
+
+			if (frameCount <= 2 || ply == undefined) {
+				fill(0);
+				rect(0, 0, width, height);
+				fill(255);
+				noStroke();
+				textSize(64);
+				text("Loading", width/2, height/2)
+				return;
+			}
+
+
+			background(0, 0, 0);
+			transl = createVector(ply.pos.x+camOff.x-(width/2), ply.pos.y+camOff.y-(height/2));
+			translate(width/2, height/2);
+			translate(-ply.pos.x+camOff.x, -ply.pos.y+camOff.y);
+			var crosshair = true;
+			//cursor('grab');
+			noCursor();
+
+			moveManager();
+			
+			image(map, 0, 0, 15000, 15000);
+
+
+			/*for (var x = 0; x < 15000; x+=100) {
+				for (var y = 0; y < 15000; y+=100) {
+					if (createVector(x, y).dist(ply.pos) < width) {
+						fill(255, 0, 0);
+						textAlign(CENTER);
+						textSize(50);
+						text(nGraph.grid[x/100][y/100].weight, x+50, y+50);
+					}
+				}
+			}*/
+
+			//posToGrid
+			//gridToPos
+			
+			for (var pool of bloodPuddles) {
+				pool.draw();
+			}
+
+			for (var w of weapons) {
+				w.draw();
+				if (ply.pos.dist(w.pos) < 240 && w.isHeld == false) {
+					if (createVector(mouseX, mouseY).add(transl).dist(w.pos) < 80) {
+						cursor("grab");
+						crosshair = false;
+						if (impulse == 0) {
+							ply.pickupWeapon(w);
+						}
+					}
+				}
+			}
+
+			impulse++;
+
+			for (var p of players) {
+				p.update();
+				p.draw();
+
+				if (p.isShooting) {
+					if (p.weapon != undefined && p.weapon.ticksHeld > 60) {
+						p.shoot();
+					}
+				}
+			}
+
+			for (p of players) {
+				if (p.health <= 0) {
+					playerDeath(p);
+				}
+			}
+
+			for (var b of bullets) {
+				b.update();
+				b.draw();
+
+				if (b.secsAlive > 4) {
+					b.delete = true;
+				}
+
+				
+			}
+			
+
+			for (var b of bullets) {
+				if (b.delete) {
+					bullets.splice(bullets.indexOf(b), 1);
+				}
+			}
+			
+			translate(-width/2, -height/2);
+			translate(ply.pos.x-camOff.x-ply.vel.x, ply.pos.y-camOff.y-ply.vel.y);
+			if (crosshair) {
+				drawCrosshair(mouseX, mouseY, 0);
+			}
+			if (ply.health <= 0) {
+				fill(255, 0, 0, 200);
+				rect(0, 0, width, height);
+
+				fill(255)
+				textSize(126);
+				stroke(0);
+				strokeWeight(10);
+				textAlign(CENTER);
+				text("YOU DIED", width/2, height/2);
+				ply.vel = createVector(0, 0);
+			}
+			hud();
+
+			if (mouseIsPressed) {
+				ply.isShooting = true;
+			}else{
+				ply.isShooting = false;
+			}
+
+		}
+
+		var keys = {}
+		
+		var moveSpeed = 16;
+
+		var recentDeath = "";
+		var recentDeathTime = 0;
+
+		function playerDeath(p) {
+			if (frameCount > 10) {
+				console.log("A player has died!");
+				p.dropHeldWeapon();
+				players.splice(players.indexOf(p), 1);
+				new bloodPuddle(createVector(p.pos.x, p.pos.y), p.color);
+				LatestDeath = p.name;
+			}
+		}
+
+		function hud() {
+			noStroke();
+			fill(2550/ply.health,2.55*ply.health,0)
+			rect(100, height-50, ply.health*2, 25)
+
+			fill(255);
+			textAlign(CENTER);
+			textSize(25);
+			text(round((ply.health/100)*1000)/10 + "% HP", 100, height-50, ply.health*2, 25);
+
+			if (ply.hasWeapon()) {
+				var b = ply.weapon.bullets;
+				var mb = ply.weapon.stats["bcapacity"];
+				stroke(0);
+				strokeWeight(3);
+				textSize(32);
+				if (ply.weapon.ticksHeld > 60) {
+					if (b > 0) {
+						text(b+"/"+mb, width-180, height-100);
+					}else{
+						text("Reloading...", width-180, height-100);
+						fill(255, 0 ,0);
+						noStroke();
+						rect(width-260, height-80, 200*ply.weapon.reload/ply.weapon.rspd, 20);
+					}
+				}else{
+					text("Equipping...", width-180, height-100);
+						fill(0, 0, 255);
+						noStroke();
+						rect(width-260, height-80, 200*ply.weapon.ticksHeld/60, 20);
+				}
+			}
+			
+				stroke(0);
+				strokeWeight(3);
+				textSize(32);
+				fill(255);
+				text("Players left: "+players.length+"/"+spawnPositions.length, 180, 100);
+				if (players.length < spawnPositions.length) {
+					text("Latest death: "+LatestDeath, 180, 140);
+				}
+			textAlign(LEFT);
+		}
+
+		var bloodPuddles = [];
+		function bloodPuddle(p, c) {
+			this.pos = p;
+			this.color = c;
+			this.secsAlive = 0;
+			bloodPuddles[bloodPuddles.length] = this;
+			const BLDRNG = 70;
+			this.bloodParts = [
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)],
+				[random(-BLDRNG, BLDRNG), random(-BLDRNG, BLDRNG), random(5, 30), random(5, 30)]
+			];
+
+			this.draw = function() {
+				this.secsAlive += 1/60;
+				if (this.secsAlive < 120) {
+					for (var i of this.bloodParts) {
+						fill(color(255,0,0));
+						noStroke();
+						ellipse(this.pos.x + i[0], this.pos.y + i[1], i[2], i[3]);
+						
+					}
+				}
+			}
+		}
+
+		function moveManager() {
+
+			
+			if (keys["a"]) {
+				ply.vel.x = lerp(ply.vel.x, -moveSpeed, 0.1);
+			}
+			if (keys["d"]) {
+				ply.vel.x = lerp(ply.vel.x, moveSpeed, 0.1);
+			}
+
+			if (!keys["a"] && !keys["d"]) {
+				ply.vel.x = lerp(ply.vel.x, 0, 0.3334);
+			}
+
+			if (keys["w"]) {
+				ply.vel.y = lerp(ply.vel.y, -moveSpeed, 0.1);
+			}
+			if (keys["s"]) {
+				ply.vel.y = lerp(ply.vel.y, moveSpeed, 0.1);
+			}
+			
+			if (!keys["w"] && !keys["s"]) {
+				ply.vel.y = lerp(ply.vel.y, 0, 0.3334);
+			}
+		}
+
+		function keyPressed() {
+			keys[key] = true;
+		}
+
+		function keyReleased() {
+			keys[key] = false;
+		}
+
+		function mousePressed() {
+			if (mouseButton == "left") {
+				impulse = 0;
+			}
+		}
+    </script>
+
+
+  </body>
+</html>

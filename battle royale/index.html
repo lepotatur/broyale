@@ -7,9 +7,7 @@
 Pathfinding Algorithm:
 https://github.com/bgrins/javascript-astar
 
-Using p5.js
-
-
+Uses p5.js
 
 
 
@@ -69,7 +67,7 @@ Using p5.js
 		var Weapons = { // never set "rate" to zero
 			"Pistol": {
 				"bcapacity":8,
-				"damage":10,
+				"damage":18,
 				"rate":10,
 				"rspd":120,
 				"inaccuracy":10,
@@ -103,7 +101,7 @@ Using p5.js
 			},
 			"AR": {
 				"bcapacity":31,
-				"damage":7,
+				"damage":14,
 				"rate":6,
 				"rspd":180,
 				"inaccuracy":15,
@@ -190,7 +188,7 @@ Using p5.js
 			},
 			"LMG": {
 				"bcapacity":100,
-				"damage":5,
+				"damage":13,
 				"rate":4,
 				"rspd":240,
 				"inaccuracy":35,
@@ -237,6 +235,22 @@ Using p5.js
 				}
 			}
 		}
+
+		function sound(src, vol=0.5) {
+		  this.sound = document.createElement("audio");
+		  this.sound.src = src;
+		  this.sound.volume = vol;
+		  this.sound.setAttribute("preload", "auto");
+		  this.sound.setAttribute("controls", "none");
+		  this.sound.style.display = "none";
+		  document.body.appendChild(this.sound);
+		  this.play = function(){
+			this.sound.play();
+		  }
+		  this.stop = function(){
+			this.sound.pause();
+		}
+}
 
 		function onScreen(x, y, r) {
 			var screenPos = createVector(transl.x + width/2, transl.y + height/2);
@@ -286,7 +300,27 @@ Using p5.js
 
 			this.wanderedForTicks = 0;
 
-			this.name = BabyNames[round(random(BabyNames.length-1))];
+			this.generateName = function() {
+				var base = BabyNames[round(random(BabyNames.length-1))];
+				var adj = Adjectives[round(random(Adjectives.length-1))];
+				var adjChance = random(1);
+				var numb = round(random(2020));
+				var numbChance = random(1);
+
+				if (adjChance < 0.4) {
+					base = adj + base;
+				}else if(adjChance < 0.8) {
+					base = base + "the" + adj
+				}
+
+				if (numbChance < 0.5) {
+					base = base + numb;
+				}
+
+				return base.toLowerCase();
+			}
+
+			this.name = this.generateName();
 
 			this.runAtStart = false; // run away from center by seeking far away guns
 			this.dodgeWhileShooting = false;
@@ -326,7 +360,9 @@ Using p5.js
 						if (this.target == undefined) {
 							this.targetVector = p5.Vector.lerp(this.targetVector, createVector(this.pos.x + random(-20, 20), this.pos.y + random(-20,20)), 0.1);
 						} else {
-							this.targetVector = p5.Vector.lerp(this.targetVector, this.target.pos, 0.1);
+							var mltX = (this.target.vel.x/60 * this.target.pos.dist(this.pos)) / difficulty;
+							var mltY = (this.target.vel.y/60 * this.target.pos.dist(this.pos)) / difficulty; 
+							this.targetVector = p5.Vector.lerp(this.targetVector, createVector(this.target.pos.x + mltX, this.target.pos.y + mltY), max(difficulty, 0.1));
 						}
 					}
 					var newrot = atan2(this.targetVector.y - this.pos.y, this.targetVector.x - this.pos.x);
@@ -338,6 +374,9 @@ Using p5.js
 						textAlign(CENTER);
 						text("task="+this.state, this.pos.x, this.pos.y+36);
 						text(this.name, this.pos.x, this.pos.y+72);
+						if (this.hasWeapon()) {
+							text(this.weapon.bullets+"/"+this.weapon.bcap, this.pos.x, this.pos.y+72+36);
+						}
 						textAlign(LEFT);
 					}
 				}
@@ -350,7 +389,7 @@ Using p5.js
 						this.target = undefined;
 						
 					}
-					if (this.impatience > 10) {
+					if (this.impatience > 5) {
 						this.target = undefined;
 					}
 				}
@@ -363,7 +402,7 @@ Using p5.js
 					if (p != this) {
 						var d = p.pos.dist(this.pos);
 						if (d < 3000) {
-							if (d - (0.5*d*(p.hasWeapon())) < dst) { // prioritize armed targets
+							if (d - (0.75*d*(p.hasWeapon())) < dst) { // prioritize armed targets
 								dst = d;
 								best = p;
 							}
@@ -389,7 +428,7 @@ Using p5.js
 						this.state = DODGING;
 					}else{
 						this.state = SEEKING;
-						if (this.pos.dist(this.target.pos) < 900) {
+						if (this.pos.dist(this.target.pos) < height) {
 							this.state = SHOOTING;
 						}
 					}
@@ -425,11 +464,16 @@ Using p5.js
 					case SHOOTING:
 						//this.targetVector = p5.Vector.lerp(this.targetVector, this.target.pos, 0.1);
 						//if (!Ray(this.pos, this.target.pos)) {
-							this.isShooting=true;
 						//}
+						this.isShooting=true;
 						if (this.dodgeWhileShooting) {
 							this.doAIState(DODGING);
 						}
+						/*if (this.getPathTo(this.target.pos).length > 5) {
+							this.isShooting=true;
+						}else{
+							this.isShooting=false;
+						}*/
 						break;
 					case ARMING:
 						if (this.wTarget == undefined || this.wTarget.isHeld) {
@@ -500,9 +544,18 @@ Using p5.js
 			this.pathToPos = function(p, speedMod) { // returns true if close enough
 				var path = this.getPathTo(p);
 				if (path != undefined) {
-					if (path.length > 1) {
-						this.moveTowardsPos(createVector(gridToPos(path[1].x, true), gridToPos(path[1].y, true)), speedMod);
-						return false;
+					if (path.length > 1 ) {
+						if (!(this.pos.dist(p) < 75)) {
+							if (this.pos.dist(createVector(path[1].x, path[1].y)) > 75) {
+								this.moveTowardsPos(createVector(gridToPos(path[1].x, true), gridToPos(path[1].y, true)), speedMod);
+							}else{
+								this.moveTowardsPos(createVector(gridToPos(path[2].x, true), gridToPos(path[2].y, true)), speedMod);
+							}
+							return false;
+						}else{
+							this.moveTowardsPos(p, speedMod);
+							return true;
+						}
 					}else{
 						this.moveTowardsPos(p, speedMod);
 						return true;
@@ -660,6 +713,9 @@ Using p5.js
 
 		var bullets = [];
 
+		//var shootSound = new sound("http://soundbible.com/grab.php?id=1998&type=mp3");
+		var deathSound = new sound('http://www.moviesoundclips.net/movies1/thehungergames/boom.mp3', 1);
+
 		function Bullet(pos, dest, shooter, d) {
 			this.owner = shooter;
 			this.pos = pos;
@@ -667,6 +723,9 @@ Using p5.js
 			this.vel = createVector(pos.x, pos.y).sub(createVector(dest.x, dest.y)).setMag(moveSpeed*-3);
 			this.secsAlive = 0;
 			this.dmg = d;
+			//this.sound = new sound("http://soundbible.com/grab.php?id=1998&type=mp3");
+			//this.sound.volume = 100/this.pos.dist(ply.pos);
+			//this.sound.play();
 
 
 			bullets[bullets.length] = this;
@@ -679,15 +738,12 @@ Using p5.js
 
 			this.update = function() {
 				this.pos.add(this.vel);
-				if (oob(this.pos.x + this.vel.x, this.pos.y + this.vel.y)) {
-					this.secsAlive += 1000;
-					//this.vel.mult(-0.6);
-				}
+
 				for (var p of players) {
-					if (p != this.owner && this.secsAlive < 10) {
+					if (p != this.owner && this.secsAlive < 5) {
 						if (this.pos.dist(p.pos) < 30) {
 							p.health -= this.dmg;
-							this.secsAlive = 1000100;
+							this.secsAlive = 1000;
 
 							if (p.ai) {
 								p.target = this.owner;
@@ -695,6 +751,12 @@ Using p5.js
 						}
 					}
 				}
+
+				if (oob(this.pos.x + this.vel.x, this.pos.y + this.vel.y)) {
+					this.secsAlive += 1000;
+					//this.vel.mult(-0.6);
+				}
+
 				this.secsAlive += 1/60;
 			}
 		}
@@ -752,6 +814,8 @@ Using p5.js
 		let mapImg;
 		var nGraph;
 
+		var freezePlayers = false;
+		const mapPath = "https://i.imgur.com/qm02s7P.png";
 		var testPly;
 
 		function setup() {
@@ -764,7 +828,8 @@ Using p5.js
 			//new Weapon(createVector(1600, 1000), "Pistol");
 			//new Weapon(createVector(1800, 1000), "AR");
 			map = createGraphics(3000, 3000);
-			mapImg = loadImage("https://i.imgur.com/koGpRUS.png");
+			//mapImg = loadImage("https://i.imgur.com/koGpRUS.png"); // (Less spawns)
+			mapImg = loadImage(mapPath);
 			var grp = [];
 			for (var i = 0; i < 150; i++) {
 				grp[i] = [];
@@ -772,45 +837,7 @@ Using p5.js
 			//new Player(true, createVector(513, 939));
 			//mapImg.get(1, 1);
 			//map.background(255);
-			setTimeout(function(){
-				for (var x = 0; x < 150; x++) {
-					for (var y = 0; y < 150; y++) {
-						var c = mapImg.get(x,y);
-						if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
-							map.fill(c);
-							map.noStroke();
-							map.rect(x*20, y*20, 20, 20);
-						}else{
-							map.fill(color(125,255,125));
-							map.noStroke();
-							map.rect(x*20, y*20, 20, 20);
-						}
-					}
-				}
-				
-				for (var y = 0; y < 150; y++) {
-					for (var x = 0; x < 150; x++) {
-						var c = mapImg.get(x, y)
-						if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
-							grp[x][y] = 0;
-						}else{
-							grp[x][y] = 1;
-						}
-
-						if (c[0] == 0 && c[1] == 255 && c[2] == 255) {
-							weaponPositions[weaponPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
-						}
-
-						if (c[0] == 255 && c[1] == 0 && c[2] == 0) {
-							spawnPositions[spawnPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
-						}
-					}
-				}
-
-				nGraph = new Graph(grp);
-
-				loop();
-			}, 1000)
+			beginGame(grp);
 			noLoop();
 		}
 		var impulse = 0;
@@ -833,7 +860,55 @@ Using p5.js
 			return(c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255);
 		}
 
-		
+		var countdown = 7.5;
+		var difficulty = 0.5;
+
+		function beginGame(grp) {
+			setTimeout(function(){
+				if (mapImg != undefined) {
+					for (var x = 0; x < 150; x++) {
+						for (var y = 0; y < 150; y++) {
+							var c = mapImg.get(x,y);
+							if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
+								map.fill(c);
+								map.noStroke();
+								map.rect(x*20, y*20, 20, 20);
+							}else{
+								map.fill(color(125,255,125));
+								map.noStroke();
+								map.rect(x*20, y*20, 20, 20);
+							}
+						}
+					}
+				
+					for (var y = 0; y < 150; y++) {
+						for (var x = 0; x < 150; x++) {
+							var c = mapImg.get(x, y)
+							if (c[0] == 0 && c[1] == 0 && c[2] == 0 && c[3] == 255) {
+								grp[x][y] = 0;
+							}else{
+								grp[x][y] = 1;
+							}
+
+							if (c[0] == 0 && c[1] == 255 && c[2] == 255) {
+								weaponPositions[weaponPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
+							}
+
+							if (c[0] == 255 && c[1] == 0 && c[2] == 0) {
+								spawnPositions[spawnPositions.length] = [gridToPos(x, true), gridToPos(y, true)];
+							}
+						}
+					}
+
+					nGraph = new Graph(grp);
+
+					loop();
+				}else{
+					mapImg = loadImage(mapPath);
+					beginGame(grp); // recursive!
+				}
+			}, 1000)
+		}
 
 		function draw() {
 
@@ -851,6 +926,11 @@ Using p5.js
 				return;
 			}
 
+			if (countdown > 0) {
+				freezePlayers=true;
+			}else{
+				freezePlayers=false
+			}
 
 			background(0, 0, 0);
 			transl = createVector(ply.pos.x+camOff.x-(width/2), ply.pos.y+camOff.y-(height/2));
@@ -901,12 +981,20 @@ Using p5.js
 			for (var p of players) {
 				p.update();
 				p.draw();
+				
+
+				if (freezePlayers) {
+					p.isShooting=false;
+					p.vel.x = 0; p.vel.y = 0;
+				}
+
 
 				if (p.isShooting) {
 					if (p.weapon != undefined && p.weapon.ticksHeld > 60) {
 						p.shoot();
 					}
 				}
+
 			}
 
 			for (p of players) {
@@ -939,17 +1027,80 @@ Using p5.js
 				drawCrosshair(mouseX, mouseY, 0);
 			}
 			if (ply.health <= 0) {
+				noStroke();
 				fill(255, 0, 0, 200);
 				rect(0, 0, width, height);
 
 				fill(255)
 				textSize(126);
 				stroke(0);
-				strokeWeight(10);
+				strokeWeight(3);
 				textAlign(CENTER);
-				text("YOU DIED", width/2, height/2);
+				if (pplace == -1) {
+					pplace = players.length;
+				}
+				var qtes = [
+					"Git gud",
+					"Wow you suck",
+					"Sucks to suck",
+					"Get better",
+					"Hah scrub",
+					"Could have been better",
+					"You're bad",
+					"Yikes that was sad",
+					"How did you not kill him?",
+					"How are you so bad",
+					"Are you playing blindfolded?",
+					"Sniper OP pls nerf",
+					"That didn't last long",
+					"That was brief",
+					"Bloody hell you're awful."
+				];
+				
+				if (qtnum == -1) {
+					qtnum = round(random(qtes.length-1));
+				}
+
+				text("YOU DIED AS #"+pplace, width/2, height/2);
+				strokeWeight(4);
+				textSize(48);
+				text(qtes[qtnum], width/2, 100 + height/2);
 				ply.vel = createVector(0, 0);
 			}
+
+			if (ply.health >=0 && players.length <= 1 && ply != undefined && players[0] == ply) {
+
+				noStroke();
+				fill(0, 255, 0, 125);
+				rect(0, 0, width, height);
+
+
+				fill(255)
+				textSize(126);
+				stroke(0);
+				strokeWeight(3);
+				textAlign(CENTER);
+
+				text("Winner", width/2, height/2);
+				ply.vel = createVector(0, 0);
+
+				textSize(32);
+
+				text("LEADERBOARD:", 3*width/4, 100);
+
+				textAlign(LEFT);
+
+				text("1) YOU", 3*width/4 - 100, 140);
+				var n = 0;
+				for ( var i = deaths.length-1; i > 0; i--) {
+					text(deaths[i], 3*width/4 - 100, 180 + (40 * n));
+					if (n > 20) {
+						break;
+					}
+					n++;
+				}
+			}
+
 			hud();
 
 			if (mouseIsPressed) {
@@ -959,9 +1110,10 @@ Using p5.js
 			}
 
 		}
-
+		var pplace = -1;
+		var qtnum = -1;
 		var keys = {}
-		
+		var deaths = [];
 		var moveSpeed = 16;
 
 		var recentDeath = "";
@@ -974,18 +1126,87 @@ Using p5.js
 				players.splice(players.indexOf(p), 1);
 				new bloodPuddle(createVector(p.pos.x, p.pos.y), p.color);
 				LatestDeath = p.name;
+				recentDeathTime = frameCount/60;
+				//deathSound.play();
+				if (p != ply) {	
+					deaths[deaths.length] = spawnPositions.length - deaths.length + ") " + p.name; // lists place numbers of each deceased player
+				}else{
+					deaths[deaths.length] = spawnPositions.length - deaths.length + ") YOU";
+				}
 			}
 		}
-
+		var gw = false;
 		function hud() {
 			noStroke();
 			fill(2550/ply.health,2.55*ply.health,0)
 			rect(100, height-50, ply.health*2, 25)
 
-			fill(255);
-			textAlign(CENTER);
-			textSize(25);
-			text(round((ply.health/100)*1000)/10 + "% HP", 100, height-50, ply.health*2, 25);
+			if (ply.health > 0) {
+				fill(255);
+				textAlign(CENTER);
+				textSize(25);
+				text(round((ply.health/100)*1000)/10 + "% HP", 100, height-50, ply.health*2, 25);
+			}
+
+			if (countdown > 0) {
+				if (countdown > 2) {
+				
+					fill( 0, (countdown-2) * (255/3) );
+					noStroke();
+					rect(0, 0, width, height);
+				}
+
+
+				fill(255);
+				textAlign(CENTER);
+				textSize(64);
+				stroke(0);
+				strokeWeight((10/128) * 64);
+				text("BEGINNING IN", width/2, height/2 - 128);
+				strokeWeight(10);
+				stroke(0);
+				textSize(128);
+				var str = round(countdown*10)/10;
+				if (str == round(str)) {
+					str = str + ".0";
+				}
+				text(str, width/2, height/2);
+
+				if (keys["q"]) {
+					difficulty += (1/60);
+				}
+				if (keys['e']) {
+					difficulty -= (1/60);
+				}
+
+				difficulty = min(1.0, max( 0.0, difficulty));
+
+				var diff = "";
+				if (difficulty < 0.3) {
+					diff = "easy";
+				}else if (difficulty < 0.5) {
+					diff = "normal";
+				}else if (difficulty < 0.7) {
+					diff = "hard";
+				}else if (difficulty < 0.9) {
+					diff = "mega hard";
+				}else{
+					diff = "literally unplayable. Good luck";
+				}
+				textSize(32);
+				strokeWeight(8);
+				text("Difficulty is set to "+diff+" ("+round(difficulty*10)/10+"). Increase it with [Q] and decrease with [E]", width/2, height/2 + 128);
+				countdown -= (1/90);
+			}
+
+			if (countdown <= 0 && !gw && difficulty >= 0.9) {
+				for (var i of players) {
+					if (i != ply) {
+						i.pickupWeapon(new Weapon(createVector(), "Sniper"));
+					}
+				}
+				gw=true;
+			}
 
 			if (ply.hasWeapon()) {
 				var b = ply.weapon.bullets;
@@ -1013,10 +1234,13 @@ Using p5.js
 				stroke(0);
 				strokeWeight(3);
 				textSize(32);
-				fill(255);
+					var z = (frameCount/60)-recentDeathTime;
+					var c = 1/z;
+					fill(255, 255/c, 255/c);
 				text("Players left: "+players.length+"/"+spawnPositions.length, 180, 100);
-				if (players.length < spawnPositions.length) {
-					text("Latest death: "+LatestDeath, 180, 140);
+				if (players.length < spawnPositions.length && players.length > 1) {
+					textAlign(LEFT);
+					text("Latest death: "+LatestDeath, 70, 140);
 				}
 			textAlign(LEFT);
 			
@@ -1064,7 +1288,7 @@ Using p5.js
 		}
 
 		function moveManager() {
-
+			if (freezePlayers) {return;}
 			
 			if (keys["a"]) {
 				ply.vel.x = lerp(ply.vel.x, -moveSpeed, 0.1);
@@ -1085,7 +1309,7 @@ Using p5.js
 			}
 			
 			if (!keys["w"] && !keys["s"]) {
-				ply.vel.y = lerp(ply.vel.y, 0, 0.3334);
+				ply.vel.y = lerp(ply.vel.y, 0, 0.314159); // heh pi
 			}
 		}
 

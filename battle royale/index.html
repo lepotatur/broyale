@@ -66,10 +66,10 @@ Uses p5.js
 
 		var Weapons = { // never set "rate" to zero
 			"Pistol": {
-				"bcapacity":8,
+				"bcapacity":14,
 				"damage":18,
-				"rate":10,
-				"rspd":120,
+				"rate":6,
+				"rspd":100,
 				"inaccuracy":10,
 				"draw" : function(held, name, wep) {
 					if (!held) {
@@ -149,7 +149,7 @@ Uses p5.js
 				"bcapacity":1,
 				"damage":100,
 				"rate":2,
-				"rspd":60,
+				"rspd":140,
 				"inaccuracy":0,
 				"draw" : function(held, name, wep) {
 					if (!held) {
@@ -182,7 +182,7 @@ Uses p5.js
 						rect(22, 8, 4, 4)
 						fill(125);
 						rect(22, 2, 16, 4)
-					
+						// pee
 					}
 				}
 			},
@@ -267,6 +267,10 @@ Uses p5.js
 			rect(x-2, y-15-4-sizeOff, 4, 15);
 		}
 
+		function windowResized() {
+		  resizeCanvas(windowWidth, windowHeight);
+		}
+
 		var players = [];
 		let map;
 
@@ -287,6 +291,9 @@ Uses p5.js
 
 			this.wTarget = undefined;
 
+			this.secsAlive = 0;
+			this.kills = [];
+
 			this.rot = 0;
 			this.targetVector = createVector();
 			
@@ -299,6 +306,8 @@ Uses p5.js
 			this.pathCacheTicks = 0;
 
 			this.wanderedForTicks = 0;
+
+			this.killTicks = 1000;
 
 			this.generateName = function() {
 				var base = BabyNames[round(random(BabyNames.length-1))];
@@ -341,8 +350,15 @@ Uses p5.js
 
 			}*/
 
+			this.killedPlayer = function(name) { // name field is obsolete as of now
+				this.killTicks = 0;
+			}
 
 			this.draw = function() {
+
+				if (this.killTicks < 120 && !this.ai) {
+					this.killTicks++;
+				}
 
 				if (this.pathCacheTicks > 0) {
 					this.pathCacheTicks--;
@@ -372,8 +388,8 @@ Uses p5.js
 						fill(this.color);
 						textSize(32);
 						textAlign(CENTER);
-						text("task="+this.state, this.pos.x, this.pos.y+36);
-						text(this.name, this.pos.x, this.pos.y+72);
+						//text("task="+this.state, this.pos.x, this.pos.y+36);
+						text(this.name + " ("+this.kills.length+" kills)", this.pos.x, this.pos.y+36);
 						if (this.hasWeapon()) {
 							text(this.weapon.bullets+"/"+this.weapon.bcap, this.pos.x, this.pos.y+72+36);
 						}
@@ -396,24 +412,28 @@ Uses p5.js
 			}
 
 			this.findPossibleTargets = function() {
-				var best = undefined;
-				var dst = 9999999;
-				for (var p of players) {
-					if (p != this) {
-						var d = p.pos.dist(this.pos);
-						if (d < 3000) {
-							if (d - (0.75*d*(p.hasWeapon())) < dst) { // prioritize armed targets
-								dst = d;
-								best = p;
+				if (difficulty < 1-(1/60)) {
+					var best = undefined;
+					var dst = 9999999;
+					for (var p of players) {
+						if (p != this) {
+							var d = p.pos.dist(this.pos);
+							if (d < 3000) {
+								if (d - (0.75*d*(p.hasWeapon())) < dst) { // prioritize armed targets
+									dst = d;
+									best = p;
+								}
 							}
 						}
 					}
+					return best;
+				}else{
+					return ply;
+
 				}
-				return best;
 			}
 
 			this.updateAIState = function() {
-				
 
 				this.clearSuperfluousTargets();
 
@@ -477,7 +497,7 @@ Uses p5.js
 						break;
 					case ARMING:
 						if (this.wTarget == undefined || this.wTarget.isHeld) {
-							if (!this.runAtStart) {
+							if (!this.runAtStart || this.doneRunning) {
 								var clst = undefined;
 								var cv = 9999999;
 								for (var w of weapons) {
@@ -490,6 +510,9 @@ Uses p5.js
 								}
 								this.wTarget = clst;
 							}else{
+								if (frameCount/60 > 20) {
+									this.doneRunning = true;
+								}
 								var clst = undefined;
 								var cv = 0;
 								for (var w of weapons) {
@@ -508,7 +531,7 @@ Uses p5.js
 							}
 						}
 
-						if (frameCount/60 > 30) {
+						if (frameCount/60 > 60) {
 							this.pickupWeapon(new Weapon(createVector(0,0), "Pistol"));
 						}
 						break;
@@ -615,6 +638,8 @@ Uses p5.js
 			}
 
 			this.update = function() {
+				
+				this.secsAlive += 1/60;
 				
 				this.vel = p5.Vector.lerp(this.vel,createVector(0, 0), 0.1);
 				
@@ -745,6 +770,12 @@ Uses p5.js
 							p.health -= this.dmg;
 							this.secsAlive = 1000;
 
+							if (p.health <= 0) {
+								this.owner.kills[this.owner.kills.length] = p.name;
+								p.killer = this.owner.name;
+								this.owner.killedPlayer(p.name);
+							}
+							
 							if (p.ai) {
 								p.target = this.owner;
 							}
@@ -1065,6 +1096,8 @@ Uses p5.js
 				strokeWeight(4);
 				textSize(48);
 				text(qtes[qtnum], width/2, 100 + height/2);
+				textSize(26);
+				text("You were killed by "+ply.killer+".", width/2, 200 + height/2);
 				ply.vel = createVector(0, 0);
 			}
 
@@ -1080,8 +1113,10 @@ Uses p5.js
 				stroke(0);
 				strokeWeight(3);
 				textAlign(CENTER);
-
+				
 				text("Winner", width/2, height/2);
+				textSize(64);
+				text("You got "+ply.kills.length+" kills!", width/2, height/2 + 100);
 				ply.vel = createVector(0, 0);
 
 				textSize(32);
@@ -1140,6 +1175,16 @@ Uses p5.js
 			noStroke();
 			fill(2550/ply.health,2.55*ply.health,0)
 			rect(100, height-50, ply.health*2, 25)
+			
+			if (ply.killTicks <= 119) {
+				fill(255);
+				stroke(0);
+				strokeWeight(3);
+				textSize(36);
+				textAlign(CENTER);
+				text("You just killed "+ply.kills[ply.kills.length-1]+"!", width/2, 3*height/4);
+				textAlign(LEFT);
+			}
 
 			if (ply.health > 0) {
 				fill(255);
@@ -1191,18 +1236,18 @@ Uses p5.js
 				}else if (difficulty < 0.9) {
 					diff = "mega hard";
 				}else{
-					diff = "literally unplayable. Good luck";
+					diff = "literally unplayable";
 				}
 				textSize(32);
 				strokeWeight(8);
 				text("Difficulty is set to "+diff+" ("+round(difficulty*10)/10+"). Increase it with [Q] and decrease with [E]", width/2, height/2 + 128);
-				countdown -= (1/90);
+				countdown -= (1/60);
 			}
 
 			if (countdown <= 0 && !gw && difficulty >= 0.9) {
 				for (var i of players) {
 					if (i != ply) {
-						i.pickupWeapon(new Weapon(createVector(), "Sniper"));
+						i.pickupWeapon(new Weapon(createVector(), "LMG"));
 					}
 				}
 				gw=true;
@@ -1254,8 +1299,24 @@ Uses p5.js
 					ellipse(width/2 + cos(ang)*100, height/2 + sin(ang)*100, 7, 7 );
 				}
 			}
-		}
 
+			if (showMinimap && ply.health >= 0 && players.length > 1 && countdown <= 0) {
+					translate(width-250, 50);
+					image(map, 0, 0, 200, 200);
+					strokeWeight(3);
+					for (var p of players) {
+						stroke(255, 0, 0);
+						var xval = p.pos.x/15000;
+						var yval = p.pos.y/15000;
+						if (p == ply) {
+							stroke(0, 0, 255);
+						}
+						point(xval * 200, yval*200);
+					}
+			}
+
+		}
+		var showMinimap=true;
 		var bloodPuddles = [];
 		function bloodPuddle(p, c) {
 			this.pos = p;
@@ -1314,11 +1375,11 @@ Uses p5.js
 		}
 
 		function keyPressed() {
-			keys[key] = true;
+			keys[key.toLowerCase()] = true;
 		}
 
 		function keyReleased() {
-			keys[key] = false;
+			keys[key.toLowerCase()] = false;
 		}
 
 		function mousePressed() {
